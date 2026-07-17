@@ -1,0 +1,33 @@
+{
+    "C_Cpp.intelliSenseEngine": "default",
+    "idf.adapterTargetName": "esp32p4",
+    "idf.customExtraPaths": "d:\\ESP_IDF\\Espressif\\tools\\tools\\xtensa-esp-elf-gdb\\14.2_20240403\\xtensa-esp-elf-gdb\\bin;d:\\ESP_IDF\\Espressif\\tools\\tools\\riscv32-esp-elf-gdb\\14.2_20240403\\riscv32-esp-elf-gdb\\bin;d:\\ESP_IDF\\Espressif\\tools\\tools\\xtensa-esp-elf\\esp-14.2.0_20240906\\xtensa-esp-elf\\bin;d:\\ESP_IDF\\Espressif\\tools\\tools\\riscv32-esp-elf\\esp-14.2.0_20240906\\riscv32-esp-elf\\bin;d:\\ESP_IDF\\Espressif\\tools\\tools\\esp32ulp-elf\\2.38_20240113\\esp32ulp-elf\\bin;d:\\ESP_IDF\\Espressif\\tools\\tools\\cmake\\3.30.2\\bin;d:\\ESP_IDF\\Espressif\\tools\\tools\\openocd-esp32\\v0.12.0-esp32-20241016\\openocd-esp32\\bin;d:\\ESP_IDF\\Espressif\\tools\\tools\\ninja\\1.12.1;d:\\ESP_IDF\\Espressif\\tools\\tools\\idf-exe\\1.0.3;d:\\ESP_IDF\\Espressif\\tools\\tools\\ccache\\4.10.2\\ccache-4.10.2-windows-x86_64;d:\\ESP_IDF\\Espressif\\tools\\tools\\dfu-util\\0.11\\dfu-util-0.11-win64;d:\\ESP_IDF\\Espressif\\tools\\tools\\esp-rom-elfs\\20241011",
+    "idf.customExtraVars": {
+        "OPENOCD_SCRIPTS": "d:\\ESP_IDF\\Espressif\\tools\\tools\\openocd-esp32\\v0.12.0-esp32-20241016/openocd-esp32/share/openocd/scripts",
+        "IDF_CCACHE_ENABLE": "1",
+        "ESP_ROM_ELF_DIR": "d:\\ESP_IDF\\Espressif\\tools\\tools\\esp-rom-elfs\\20241011/"
+    },
+    "idf.espIdfPathWin": "d:\\ESP_IDF\\Espressif\\frameworks\\esp-idf-v5.4master",
+    "idf.openOcdConfigs": [
+        "board/esp32p4-builtin.cfg"
+    ],
+    "idf.portWin": "COM127",
+    "idf.pythonBinPathWin": "d:\\ESP_IDF\\Espressif\\tools\\python_env\\idf5.4_py3.11_env\\Scripts\\python.exe",
+    "idf.toolsPathWin": "d:\\ESP_IDF\\Espressif\\tools",
+    "files.associations": {
+        "freertos.h": "c",
+        "esp_log.h": "c",
+        "cstdint": "c",
+        "myiic.h": "c",
+        "gpio.h": "c",
+        "stdio.h": "c",
+        "i2c_master.h": "c",
+        "compare": "c",
+        "pic.h": "c",
+        "lcd.h": "c"
+    },
+    "idf.flashType": "UART",
+    "C_Cpp.errorSquiggles": "disabled",
+    "files.autoGuessEncoding": true,
+    "idf.gitPathWin": "d:\\ESP_IDF\\Espressif\\tools\\tools\\idf-git\\2.39.2\\cmd\\git.exe"
+}
