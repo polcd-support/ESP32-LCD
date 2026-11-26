@@ -241,8 +241,10 @@ static esp_err_t mipi_lcd_panelreset(esp_lcd_panel_t *panel)
         gpio_set_level(mipi_lcd->reset_gpio_num, mipi_lcd->reset_level);
         vTaskDelay(pdMS_TO_TICKS(100));                     /* 复位脉冲: ST7701 TRW >= 10us */
         gpio_set_level(mipi_lcd->reset_gpio_num, !mipi_lcd->reset_level);
-        vTaskDelay(pdMS_TO_TICKS(100));                     /* 复位释放到可下命令: 规格 TRT >= 120ms, 本屏 100ms 实测可用;
-                                                             * 冷启动若偶发首条命令丢失, 改成 200 */
+        vTaskDelay(pdMS_TO_TICKS(200));                     /* 复位释放到可下命令: ST7701S 规格 7.5.5 TRT >= 120ms。
+                                                             * 旧值100ms 低于规格, 冷启动偶发首条命令不回ACK
+                                                             * (PHY_STATUS d0_stop=0, init 卡死 -> 黑屏/条纹),
+                                                             * 重上电又正常。RK dtsi 的 reset-delay-ms 也是 120。*/
     }
     else                                    /* 软件复位 */
     {
@@ -523,18 +525,16 @@ esp_lcd_panel_handle_t mipi_lcd_init(void)
     ESP_ERROR_CHECK(esp_lcd_new_panel_io_dbi(mipi_dsi_bus, &dbi_config, &mipi_dbi_io));
     LCD_STAGE(3);
 
-    /* 面板不回ACK时: IDF/硬件的 CMD_MODE_CFG.ACK_RQST_EN 默认是 1, 每条DCS命令都会做总线周转(BTA)
-     * 等面板应答; 面板不响应就把D0钳在HS态(日志 d0_stop=0), 初始化卡在第一条命令。
-     * 本屏实测不回ACK(0x36 后 PHY_STATUS=0x15AF), 这里清掉该位; 副作用是不能再发DCS读命令(本工程不需要)。*/
-    REG_CLR_BIT(DSI_HOST_CMD_MODE_CFG_REG, 1 << 1);     /* bit[1] = ack_rqst_en */
-    ESP_LOGI(mipi_lcd_tag, "cmd_mode_cfg: 0x%08X (ACK_RQST_EN cleared)", (unsigned)REG_READ(DSI_HOST_CMD_MODE_CFG_REG));
+    ESP_LOGI(mipi_lcd_tag, "cmd_mode_cfg: 0x%08X", (unsigned)REG_READ(DSI_HOST_CMD_MODE_CFG_REG));
     ESP_LOGI(mipi_lcd_tag, "DBI io ready");
 
     /* 创建LCD控制器驱动 */
     esp_lcd_panel_handle_t mipi_lcd_ctrl_panel;
     esp_lcd_panel_dev_config_t lcd_dev_config = {
         .bits_per_pixel = 24,                               /* RGB888 */
-        .rgb_ele_order  = LCD_RGB_ELEMENT_ORDER_RGB,        /* 像素数据RGB顺序 */
+        .rgb_ele_order  = LCD_RGB_ELEMENT_ORDER_BGR,        /* 本屏实际是 BGR 顺序: 纯红(FF0000)显示成蓝、纯蓝显示成红,
+                                                             * 绿色正常; P4的DSI只能按标准RGB888发(没有字节交换选项),
+                                                             * 所以用 MADCTL(0x36)=0x08 让面板按BGR解释 */
         .reset_gpio_num = lcddev.ctrl.lcd_rst,              /* MIPILCD屏的复位引脚 */
     };
     ESP_ERROR_CHECK(mipi_lcd_new_panel(mipi_dbi_io, &lcd_dev_config, &mipi_lcd_ctrl_panel));

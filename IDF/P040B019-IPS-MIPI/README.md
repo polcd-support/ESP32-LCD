@@ -103,11 +103,11 @@ dtsi 里的 `0xFF` 是 RK 平台“等到够”的写法。厂文本的 10ms 是
 `0x36 MADCTL` / `0x3A COLMOD(0x77)` 仍在厂序列之前（reset 之后）发送，沿用旧工程顺序；
 面板厂序列本身不含这两条。若出现镜像或 565 色偏，先查这里。
 
-## 上板记录（2026-11-26）：横竖条纹的根因是面板不回 ACK
+## 上板记录（2026-11-26）：冷启动偶发黑屏/条纹 = 复位后等待不足
 
-现象：新屏点亮后满屏横竖条纹/线条，完全不可用；旧屏 P024BM057 在同一块板上正常。
+现象：新屏第一次上电满屏横竖条纹、完全不可用；**同一份固件重新复位后又正常**；旧屏 P024BM057 同板正常。
 
-串口日志（修复前）：
+失败时的串口日志：
 
 ```
 I mipi_lcd: link idle @after reset: PHY_STATUS=0x000015BD (clk_stop=1 d0_stop=1 d1_stop=1)
@@ -116,24 +116,44 @@ E mipi_lcd: panel init failed: ESP_ERR_TIMEOUT, skip DPI setup
 E lcd_demo: panel init failed, stay here with backlight on
 ```
 
-`d0_stop=0` 表示 host 发完第一条命令（`0x36 MADCTL`）后做了总线周转（BTA）在等面板应答，
-面板不应答，链路就永远停在 HS 态。**初始化一条命令都没执行成功**，面板处于未配置状态，屏幕上就是条纹。
+`d0_stop=0`：host 发完第一条 `0x36 MADCTL` 后做总线周转（BTA）等面板 ACK，面板没应答，D0 被钳在 HS 态。
+初始化一条命令都没执行成功，面板处于未配置状态 → 满屏条纹。
 
-根因：`CMD_MODE_CFG.ACK_RQST_EN`（bit[1]）为 1，上电默认值读出来是 `0x010F7F02`。
-每条 DCS 写都会请求 ACK 并等 BTA，本屏不返回 ACK（不是没供电：背光/画面都在，说明 VDDI/VCI 正常）。
+**根因**：`mipi_lcd_panelreset()` 里复位释放到第一条命令只等 100ms，
+而 ST7701S 规格书 7.5.5 的 TRT（复位取消→可下命令，含 NVM 载入）要求 **≥ 120ms**，
+RK dtsi 的 `reset-delay-ms` 也是 120。100ms 卡在临界点，冷启动时偶发首条命令被丢，面板不应答 → 卡死。
 
-修复（`mipi_lcd.c`，创建 DBI IO 之后、发任何命令之前）：
+修复：复位释放后的延时 100ms → **200ms**（`mipi_lcd_panelreset()`）。
+
+排查过程中试过、已回退的方案（记下来避免重走）：
+
+| 试过的 | 结果 |
+| --- | --- |
+| 清 `CMD_MODE_CFG.ACK_RQST_EN`（bit[1]）绕过 BTA | 卡死变成"静默失败"：命令照样发，面板没收到，日志不再报错但屏也不亮。**不是根因**，已回退，保持 ACK 使能（初始化失败能立刻在日志里暴露） |
+| PCLK 26MHz（求 58.4Hz） | 与本次现象无关，但见上一节：26 会让 host/bridge 换算差 2.6%，必须用 30MHz |
+| 初始化序列延时 10/20/120 → 255ms | 与 RK dtsi 对齐，保留（不影响本问题） |
+
+复位时序的两个值（ST7701S 7.5.5）：TRW（复位脉冲）≥ 10us → 本工程 100ms；TRT（复位释放→可下命令）≥ 120ms → 本工程 200ms。
+
+### 颜色 R/B 反了（同一天第二次上板）
+
+现象：纯色块顺序是 红→绿→蓝→白，屏上看到 **蓝→绿→红→白**——红蓝互换、绿正常，黑白不变。
+
+判断：只有 R/B 互换，说明面板把 24bit 数据按 **BGR** 解释。主机侧没有做错：
+`mipi_dsi_hal_host_dpi_set_color_coding()` 对 RGB888 只有一种编码（`MIPI_DSI_LL_COLOR_CODE_24BIT`），
+没有字节交换选项；`lcd.c` 的 RGB565→RGB888 也是标准 R,G,B 写入帧缓存。
+
+修复（一处）：
 
 ```c
-REG_CLR_BIT(DSI_HOST_CMD_MODE_CFG_REG, 1 << 1);   // bit[1] = ack_rqst_en
+.rgb_ele_order = LCD_RGB_ELEMENT_ORDER_BGR,   // -> 初始化时发 0x36 MADCTL = 0x08 (bit3=BGR)
 ```
 
-副作用：不能再发 DCS 读命令（0xDA/0x0A 等），本工程不需要读 ID。
-修复后日志走到 `DPI panel started, video streaming`，画面正常。
+验证：启动日志 `init: display on (MADCTL=0x08, COLMOD=0x77)`。
 
-补充：ST7701S 规格书 7.5.5 节要求复位释放到可下命令的间隔 **TRT ≥ 120ms**，本工程 reset 后等 100ms
-（旧工程同值，实测可用）。若冷启动偶发“首条命令丢失/画面异常”，把 `mipi_lcd_panelreset()` 里的
-第二个 100ms 改成 200ms 即可。
+注意：dtsi 里 RK 侧没有发 `0x36`，MADCTL 保持默认 0x00，所以这块屏在 RK3568 上大概率也是红蓝互换的
+（当时只验证了"能点亮"）。ST7701S 规格书里面板标称 "RGB Vertical Stripe"，
+但模块实际表现出 BGR；以实测为准。
 
 ## 触摸（未实现）
 
